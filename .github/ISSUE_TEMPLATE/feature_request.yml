@@ -1,0 +1,31 @@
+name: Feature request
+description: Suggest a focused improvement for freight weight calculation or Excel workflow.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Describe a general workflow. Do not include customer or shipment data, private rates,
+        account credentials, or confidential company processes.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: What task is difficult or currently unsupported?
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Desired behavior
+      description: Explain the outcome that would help.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false

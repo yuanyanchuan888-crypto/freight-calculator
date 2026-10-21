@@ -1,0 +1,58 @@
+name: Bug report
+description: Report a reproducible calculation, interface, or Excel issue.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Use synthetic examples only. Do not attach customer, shipment, bill of lading,
+        supplier-rate, credential, or other confidential information.
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      description: For example, 0.2.0.
+      placeholder: 0.2.0
+    validations:
+      required: true
+  - type: dropdown
+    id: run_mode
+    attributes:
+      label: How did you run the app?
+      options:
+        - Windows portable EXE
+        - Python source
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Windows version, Python version if applicable, and display scaling if relevant.
+      placeholder: Windows 11, Python 3.12, 100% scaling
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include only synthetic dimensions, weights, and settings.
+      placeholder: 1. Open... 2. Enter synthetic values... 3. Select...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Do not include private workbooks or screenshots containing real business data.
+    validations:
+      required: false

@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "international-freight-calculator"
+version = "0.2.0"
+description = "Local freight volume-weight and chargeable-weight calculator"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = ["openpyxl>=3.1,<4"]
+
+[project.scripts]
+freight-calculator = "freight_calculator.ui:main"
+
+[tool.setuptools.packages.find]
+include = ["freight_calculator*"]
