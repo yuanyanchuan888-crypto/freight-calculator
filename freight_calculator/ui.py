@@ -31,16 +31,25 @@ class FreightCalculatorApp:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.root.title("国际物流计费计算器 | International Freight Calculator")
-        self.root.geometry("1440x900")
-        self.root.minsize(1180, 760)
+        screen_width = root.winfo_screenwidth()
+        screen_height = root.winfo_screenheight()
+        width = min(1440, max(900, screen_width - 48))
+        height = min(900, max(580, screen_height - 96))
+        x = max(0, (screen_width - width) // 2)
+        y = max(0, (screen_height - height) // 2)
+        self.root.geometry(f"{width}x{height}+{x}+{y}")
+        self.root.minsize(900, 580)
         self.root.configure(background="#F2F5F8")
         self.lines: list[CargoLine] = []
         self.last_result: CalculationResult | None = None
+        self._responsive_layout: tuple[bool, ...] | None = None
 
         self._configure_style()
         self._build_layout()
         self._refresh_table()
         self._update_summary()
+        self.root.bind("<Configure>", self._on_root_resize, add="+")
+        self.root.after_idle(self._apply_responsive_layout)
 
     def _configure_style(self) -> None:
         style = ttk.Style(self.root)
@@ -71,21 +80,21 @@ class FreightCalculatorApp:
         style.configure("MetricLabel.TLabel", background="#FFFFFF", foreground="#617384",
                         font=("Microsoft YaHei UI", 9))
         style.configure("MetricValue.TLabel", background="#FFFFFF", foreground="#173B57",
-                        font=("Microsoft YaHei UI", 16, "bold"))
+                        font=("Microsoft YaHei UI", 15, "bold"))
         style.configure("Primary.TButton", background="#147D83", foreground="#FFFFFF",
-                        padding=(13, 8), font=("Microsoft YaHei UI", 10, "bold"),
+                        padding=(10, 6), font=("Microsoft YaHei UI", 10, "bold"),
                         borderwidth=0)
         style.map("Primary.TButton", background=[("active", "#0F696E"), ("disabled", "#91B8BA")],
                   foreground=[("disabled", "#F5FAFA")])
-        style.configure("TButton", padding=(10, 7), borderwidth=0)
+        style.configure("TButton", padding=(8, 6), borderwidth=0)
         style.map("TButton", background=[("active", "#DCE8EE")])
         style.configure("TEntry", padding=(7, 5), fieldbackground="#FFFFFF")
         style.configure("TCombobox", padding=(6, 5), fieldbackground="#FFFFFF")
         style.configure("Treeview", background="#FFFFFF", fieldbackground="#FFFFFF",
-                        foreground="#263746", rowheight=32, font=("Microsoft YaHei UI", 9),
+                        foreground="#263746", rowheight=29, font=("Microsoft YaHei UI", 9),
                         borderwidth=0)
         style.configure("Treeview.Heading", background="#E7EEF3", foreground="#173B57",
-                        font=("Microsoft YaHei UI", 9, "bold"), padding=(8, 9), relief="flat")
+                        font=("Microsoft YaHei UI", 9, "bold"), padding=(6, 7), relief="flat")
         style.map("Treeview", background=[("selected", "#D7EBED")],
                   foreground=[("selected", "#173B57")])
 
@@ -93,8 +102,9 @@ class FreightCalculatorApp:
         self.root.grid_columnconfigure(0, weight=1)
         self.root.grid_rowconfigure(3, weight=1)
 
-        header = tk.Frame(self.root, background="#173B57", padx=26, pady=17)
+        header = tk.Frame(self.root, background="#173B57", padx=18, pady=12)
         header.grid(row=0, column=0, sticky="ew")
+        self.header = header
         header.grid_columnconfigure(0, weight=1)
         tk.Label(header, text="国际物流计费计算器", bg="#173B57", fg="#FFFFFF",
                  font=("Microsoft YaHei UI", 19, "bold")).grid(row=0, column=0, sticky="w")
@@ -107,9 +117,10 @@ class FreightCalculatorApp:
                  padx=11, pady=6, font=("Segoe UI", 8, "bold")).grid(
                      row=0, column=1, rowspan=2, sticky="e", padx=(18, 0))
 
-        settings = ttk.Frame(self.root, padding=(22, 13, 22, 7))
+        settings = ttk.Frame(self.root, padding=(14, 9, 14, 5))
         settings.grid(row=1, column=0, sticky="ew")
-        settings.grid_columnconfigure(0, weight=4)
+        self.settings_frame = settings
+        settings.grid_columnconfigure(0, weight=3)
         settings.grid_columnconfigure(1, weight=2)
 
         self.divisor_var = tk.StringVar(value="6000")
@@ -121,12 +132,14 @@ class FreightCalculatorApp:
         self.default_weight_var = tk.StringVar(value="kg")
 
         rules = ttk.LabelFrame(settings, text="计费规则", style="Panel.TLabelframe",
-                               padding=(13, 10))
+                               padding=(10, 8))
         rules.grid(row=0, column=0, sticky="nsew", padx=(0, 9))
+        self.rules_frame = rules
         rules.grid_columnconfigure(4, weight=1)
         ttk.Label(rules, text="体积重除数").grid(row=0, column=0, sticky="w", padx=(0, 8))
         divisor_box = ttk.Combobox(rules, textvariable=self.divisor_var, width=9,
                                    values=("5000", "6000", "自定义"), state="readonly")
+        self.divisor_box = divisor_box
         divisor_box.grid(row=0, column=1, sticky="w", padx=(0, 7))
         self.custom_divisor_entry = ttk.Entry(rules, textvariable=self.custom_divisor_var, width=9)
         self.custom_divisor_entry.grid(row=0, column=2, sticky="w", padx=(0, 18))
@@ -134,6 +147,7 @@ class FreightCalculatorApp:
         ttk.Label(rules, text="计费口径").grid(row=0, column=3, sticky="w", padx=(0, 8))
         mode_box = ttk.Combobox(rules, textvariable=self.mode_var, width=25,
                                 values=tuple(MODE_LABELS), state="readonly")
+        self.mode_box = mode_box
         mode_box.grid(row=0, column=4, sticky="ew")
 
         ttk.Label(rules, text="进位单位").grid(row=1, column=0, sticky="w", padx=(0, 8), pady=(9, 0))
@@ -141,15 +155,17 @@ class FreightCalculatorApp:
             rules, textvariable=self.rounding_var, width=9,
             values=("不进位", "0.1 kg", "0.5 kg", "1 kg", "自定义"), state="readonly",
         )
+        self.rounding_box = rounding_box
         rounding_box.grid(row=1, column=1, sticky="w", padx=(0, 7), pady=(9, 0))
         self.custom_rounding_entry = ttk.Entry(rules, textvariable=self.custom_rounding_var, width=9)
         self.custom_rounding_entry.grid(row=1, column=2, sticky="w", padx=(0, 18), pady=(9, 0))
-        ttk.Label(rules, text="规则请以具体承运渠道的书面确认为准。",
+        ttk.Label(rules, text="计费重取实重与体积重较大值；选用进位时向上取整。渠道规则请书面核实。",
                   style="Hint.TLabel").grid(row=1, column=3, columnspan=2, sticky="w", pady=(9, 0))
 
         units = ttk.LabelFrame(settings, text="新增货物默认单位", style="Panel.TLabelframe",
-                               padding=(13, 10))
+                               padding=(10, 8))
         units.grid(row=0, column=1, sticky="nsew", padx=(9, 0))
+        self.units_frame = units
         units.grid_columnconfigure(1, weight=1)
         units.grid_columnconfigure(3, weight=1)
         ttk.Label(units, text="尺寸").grid(row=0, column=0, sticky="w", padx=(0, 6))
@@ -168,23 +184,29 @@ class FreightCalculatorApp:
             variable.trace_add("write", lambda *_args: self._recalculate_safely())
         self._sync_settings_fields()
 
-        toolbar = ttk.Frame(self.root, padding=(22, 5, 22, 11))
-        toolbar.grid(row=2, column=0, sticky="new")
-        ttk.Label(toolbar, text="货物明细", style="Section.TLabel").pack(side="left", padx=(0, 6))
-        ttk.Label(toolbar, text="录入每种货物的件数、外箱尺寸和单件实际重量。",
-                  style="SectionHint.TLabel").pack(side="left", padx=(0, 12))
-        ttk.Button(toolbar, text="新增货物", style="Primary.TButton",
-                   command=self._add_line).pack(side="left", padx=4)
-        ttk.Button(toolbar, text="编辑选中", command=self._edit_line).pack(side="left", padx=4)
-        ttk.Button(toolbar, text="删除选中", command=self._delete_line).pack(side="left", padx=4)
-        ttk.Separator(toolbar, orient="vertical").pack(side="left", fill="y", padx=9)
-        ttk.Button(toolbar, text="导入 Excel", command=self._import_excel).pack(side="left", padx=4)
-        ttk.Button(toolbar, text="导出 Excel", command=self._export_excel).pack(side="left", padx=4)
-        ttk.Button(toolbar, text="导出模板", command=self._export_template).pack(side="left", padx=4)
-        ttk.Button(toolbar, text="重新计算", style="Primary.TButton",
-                   command=self._calculate).pack(side="right", padx=4)
+        toolbar = ttk.Frame(self.root, padding=(14, 4, 14, 8))
+        toolbar.grid(row=2, column=0, sticky="ew")
+        ttk.Label(toolbar, text="货物明细", style="Section.TLabel").grid(
+            row=0, column=0, sticky="w", padx=(0, 7))
+        toolbar_hint = ttk.Label(toolbar, text="按包装规格录入件数、外箱尺寸及单件实际重量。",
+                                 style="SectionHint.TLabel")
+        toolbar_hint.grid(row=0, column=1, sticky="w")
+        self.toolbar_hint = toolbar_hint
+        actions = ttk.Frame(toolbar)
+        actions.grid(row=1, column=0, columnspan=3, sticky="ew", pady=(5, 0))
+        actions.grid_columnconfigure(7, weight=1)
+        ttk.Button(actions, text="新增货物", style="Primary.TButton",
+                   command=self._add_line).grid(row=0, column=0, padx=(0, 4))
+        ttk.Button(actions, text="编辑选中", command=self._edit_line).grid(row=0, column=1, padx=4)
+        ttk.Button(actions, text="删除选中", command=self._delete_line).grid(row=0, column=2, padx=4)
+        ttk.Separator(actions, orient="vertical").grid(row=0, column=3, sticky="ns", padx=6)
+        ttk.Button(actions, text="导入 Excel", command=self._import_excel).grid(row=0, column=4, padx=4)
+        ttk.Button(actions, text="导出 Excel", command=self._export_excel).grid(row=0, column=5, padx=4)
+        ttk.Button(actions, text="导出模板", command=self._export_template).grid(row=0, column=6, padx=4)
+        ttk.Button(actions, text="重新计算", style="Primary.TButton",
+                   command=self._calculate).grid(row=0, column=8, padx=(6, 0))
 
-        table_area = ttk.Frame(self.root, padding=(22, 0, 22, 13))
+        table_area = ttk.Frame(self.root, padding=(14, 0, 14, 9))
         table_area.grid(row=3, column=0, sticky="nsew")
         table_area.grid_columnconfigure(0, weight=1)
         table_area.grid_rowconfigure(0, weight=1)
@@ -195,22 +217,23 @@ class FreightCalculatorApp:
         self.tree = ttk.Treeview(table_area, columns=columns, show="headings", height=12,
                                  selectmode="browse")
         headings = {
-            "no": ("序号", 54, "center"),
-            "name": ("货物名称", 190, "w"),
-            "pieces": ("件数", 68, "center"),
-            "length": ("长", 75, "e"),
-            "width": ("宽", 75, "e"),
-            "height": ("高", 75, "e"),
-            "dimension_unit": ("尺寸单位", 82, "center"),
-            "actual": ("单件实际重量", 120, "e"),
-            "weight_unit": ("重量单位", 82, "center"),
-            "volume": ("行体积 (m³)", 112, "e"),
-            "volumetric": ("行体积重 (kg)", 125, "e"),
-            "per_piece": ("逐件计费重量 (kg)", 144, "e"),
+            "no": ("序号", 44, 36, "center"),
+            "name": ("货物名称", 150, 95, "w"),
+            "pieces": ("件数", 52, 42, "center"),
+            "length": ("长", 56, 42, "e"),
+            "width": ("宽", 56, 42, "e"),
+            "height": ("高", 56, 42, "e"),
+            "dimension_unit": ("尺寸单位", 68, 55, "center"),
+            "actual": ("单件实重", 90, 72, "e"),
+            "weight_unit": ("重量单位", 68, 55, "center"),
+            "volume": ("行体积(m³)", 88, 68, "e"),
+            "volumetric": ("行体积重(kg)", 100, 76, "e"),
+            "per_piece": ("逐件计费重(kg)", 112, 88, "e"),
         }
-        for key, (title, width, anchor) in headings.items():
+        self._table_headings = headings
+        for key, (title, width, _minwidth, anchor) in headings.items():
             self.tree.heading(key, text=title)
-            self.tree.column(key, width=width, minwidth=width, anchor=anchor,
+            self.tree.column(key, width=width, minwidth=_minwidth, anchor=anchor,
                              stretch=(key in ("name", "per_piece")))
         self.tree.tag_configure("even", background="#F7FAFC")
         self.tree.tag_configure("odd", background="#FFFFFF")
@@ -226,10 +249,10 @@ class FreightCalculatorApp:
         self.tree.bind("<Insert>", lambda _event: self._add_line())
         self.root.bind("<Control-Return>", lambda _event: self._calculate())
 
-        summary_frame = ttk.Frame(self.root, padding=(22, 0, 22, 11))
+        summary_frame = ttk.Frame(self.root, padding=(14, 0, 14, 8))
         summary_frame.grid(row=4, column=0, sticky="ew")
-        for col in range(6):
-            summary_frame.grid_columnconfigure(col, weight=1)
+        self.summary_frame = summary_frame
+        self.metric_cards: list[ttk.Frame] = []
         self.metric_vars = {
             "volume": tk.StringVar(value="—"),
             "actual": tk.StringVar(value="—"),
@@ -246,21 +269,92 @@ class FreightCalculatorApp:
             ("shipment", "整票汇总计费重量", "kg"),
             ("selected", "当前计费重量", "kg"),
         )
-        for index, (key, title, unit) in enumerate(metric_titles):
-            card = ttk.Frame(summary_frame, style="Card.TFrame", padding=(12, 10))
-            card.grid(row=0, column=index, sticky="ew", padx=(0 if index == 0 else 6, 0))
+        for key, title, unit in metric_titles:
+            card = ttk.Frame(summary_frame, style="Card.TFrame", padding=(9, 7))
             ttk.Label(card, text=title, style="MetricLabel.TLabel").pack(anchor="w")
             ttk.Label(card, textvariable=self.metric_vars[key], style="MetricValue.TLabel").pack(anchor="w", pady=(5, 0))
             ttk.Label(card, text=unit, style="MetricLabel.TLabel").pack(anchor="w")
+            self.metric_cards.append(card)
 
-        footer = ttk.Frame(self.root, padding=(22, 0, 22, 14))
+        footer = ttk.Frame(self.root, padding=(14, 0, 14, 10))
         footer.grid(row=5, column=0, sticky="ew")
+        self.footer = footer
         self.status_var = tk.StringVar(value="尚未录入货物。选择参数后添加货物即可开始。")
         footer.grid_columnconfigure(0, weight=1)
-        ttk.Label(footer, textvariable=self.status_var, style="Muted.TLabel").grid(
-            row=0, column=0, sticky="w")
-        ttk.Label(footer, text="快捷键：Insert 新增  ·  Delete 删除  ·  Ctrl+Enter 计算",
-                  style="Muted.TLabel").grid(row=0, column=1, sticky="e")
+        self.status_label = ttk.Label(footer, textvariable=self.status_var, style="Muted.TLabel")
+        self.status_label.grid(row=0, column=0, sticky="w")
+        self.shortcuts_label = ttk.Label(
+            footer, text="Insert 新增 · Delete 删除 · Ctrl+Enter 计算", style="Muted.TLabel")
+        self.shortcuts_label.grid(row=0, column=1, sticky="e")
+
+    def _on_root_resize(self, event: tk.Event) -> None:
+        if event.widget is self.root:
+            self.root.after_idle(self._apply_responsive_layout)
+
+    def _apply_responsive_layout(self) -> None:
+        width = self.root.winfo_width()
+        height_compact = self.root.winfo_height() < 700
+        compact = width < 1120
+        compact_footer = width < 1080
+        compact_controls = width < 1080
+        state = (compact, compact_controls, compact_footer, height_compact)
+        if state == self._responsive_layout:
+            self._adapt_table_columns()
+            return
+        self._responsive_layout = state
+
+        self.settings_frame.grid_columnconfigure(0, weight=7)
+        self.settings_frame.grid_columnconfigure(1, weight=4)
+        self.rules_frame.grid_configure(row=0, column=0, padx=(0, 7), pady=0)
+        self.units_frame.grid_configure(row=0, column=1, padx=(7, 0), pady=0)
+        self.divisor_box.configure(width=7 if compact_controls else 9)
+        self.custom_divisor_entry.configure(width=7 if compact_controls else 9)
+        self.mode_box.configure(width=16 if compact_controls else 25)
+        self.rounding_box.configure(width=7 if compact_controls else 9)
+        self.custom_rounding_entry.configure(width=7 if compact_controls else 9)
+        if height_compact:
+            self.header.configure(padx=13, pady=7)
+            self.settings_frame.configure(padding=(10, 3, 10, 2))
+            self.rules_frame.configure(padding=(6, 4))
+            self.units_frame.configure(padding=(6, 4))
+            self.toolbar_hint.grid_remove()
+        else:
+            self.header.configure(padx=18, pady=12)
+            self.settings_frame.configure(padding=(14, 9, 14, 5))
+            self.rules_frame.configure(padding=(10, 8))
+            self.units_frame.configure(padding=(10, 8))
+            self.toolbar_hint.grid()
+
+        for col in range(6):
+            self.summary_frame.grid_columnconfigure(col, weight=0, uniform="")
+        columns = 6 if (not compact or height_compact) else 3
+        for col in range(columns):
+            self.summary_frame.grid_columnconfigure(col, weight=1, uniform="metrics")
+        for index, card in enumerate(self.metric_cards):
+            row, column = divmod(index, columns)
+            card.grid(row=row, column=column, sticky="ew",
+                      padx=(0 if column == 0 else 5, 0), pady=(0 if row == 0 else 5, 0))
+
+        if compact_footer:
+            self.shortcuts_label.grid_configure(row=1, column=0, sticky="w", pady=(2, 0))
+            self.status_label.configure(wraplength=max(320, width - 42))
+        else:
+            self.shortcuts_label.grid_configure(row=0, column=1, sticky="e")
+            self.status_label.configure(wraplength=0)
+        self._adapt_table_columns()
+
+    def _adapt_table_columns(self) -> None:
+        if not hasattr(self, "tree"):
+            return
+        available = max(0, self.tree.winfo_width() - 4)
+        if available < 200:
+            return
+        base_total = sum(spec[1] for spec in self._table_headings.values())
+        min_total = sum(spec[2] for spec in self._table_headings.values())
+        target = max(min_total, available)
+        scale = min(1.0, target / base_total)
+        for key, (_title, base, minimum, _anchor) in self._table_headings.items():
+            self.tree.column(key, width=max(minimum, round(base * scale)))
 
     @staticmethod
     def _unit_combo(
@@ -383,10 +477,12 @@ class FreightCalculatorApp:
             self._refresh_table()
             return
         self._update_summary(self.last_result)
+        increment = self.last_result.settings.rounding_increment_kg
+        rounding_text = "不进位" if increment is None else f"{increment} kg 向上进位"
         self.status_var.set(
-            f"已按 {self.last_result.settings.volume_divisor} cm³/kg 和"
-            f"“{MODE_NAMES[self.last_result.settings.billing_mode]}”规则计算；"
-            "以上为计算示例，具体账单以承运渠道确认结果为准。"
+            f"已计算：除数 {self.last_result.settings.volume_divisor} cm³/kg · "
+            f"{MODE_NAMES[self.last_result.settings.billing_mode]} · {rounding_text}。"
+            "仅供核算，实际渠道规则请书面确认。"
         )
         self._refresh_table()
 

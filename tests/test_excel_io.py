@@ -46,7 +46,7 @@ class ExcelIoTests(unittest.TestCase):
             path = Path(temp_dir) / "template.xlsx"
             write_template(path)
             workbook = load_workbook(path, data_only=False)
-            self.assertEqual(workbook.sheetnames, ["货物明细", "计算参数", "填写说明"])
+            self.assertEqual(workbook.sheetnames, ["货物明细", "计算参数", "填写说明", "演示计算"])
             sheet = workbook["货物明细"]
             self.assertEqual(sheet.freeze_panes, "C2")
             self.assertIn("CargoInput", sheet.tables)
@@ -55,6 +55,7 @@ class ExcelIoTests(unittest.TestCase):
             ))
             self.assertIsNone(sheet[2][0].value)
             self.assertEqual(sheet[2][1].fill.fgColor.rgb[-6:], "FFF4D6")
+            self.assertEqual(sheet[2][2].number_format, "0.########")
             validation_refs = {str(rule.sqref) for rule in sheet.data_validations.dataValidation}
             self.assertIn("B2:B5001", validation_refs)
             self.assertIn("F2:F5001", validation_refs)
@@ -62,6 +63,15 @@ class ExcelIoTests(unittest.TestCase):
             self.assertIn("货物明细", workbook["填写说明"]["A2"].value)
             params = workbook["计算参数"]
             self.assertEqual(len(params.data_validations.dataValidation), 3)
+            demo = workbook["演示计算"]
+            self.assertIn("合成数据", demo["A1"].value)
+            self.assertEqual(demo["A9"].value, "体积重除数")
+            self.assertEqual(demo["B12"].value, 0.196)
+            self.assertEqual(demo["B13"].value, 32.2)
+            self.assertAlmostEqual(demo["B14"].value, 32.666666666666664, places=12)
+            self.assertEqual(demo["B15"].value, 39)
+            self.assertEqual(demo["B16"].value, 33)
+            self.assertEqual(demo["A18"].value, "不同渠道的除数、计费口径、进位及最低计费可能不同，请以该票承运渠道确认的书面规则为准。")
             workbook.close()
 
     def test_entered_template_round_trips_multiple_rows_and_custom_parameters(self):
