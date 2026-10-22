@@ -1,6 +1,8 @@
 # International Freight Calculator
 
-International Freight Calculator 是一款离线运行的中文桌面工具，用于整理多件货物的体积、实际重量、体积重和计费重量。它不连接承运商报价系统，也不代表任何承运商的通用计费规则。
+International Freight Calculator 0.3.0 是一款离线运行的中文桌面工具，用于整理多件货物的体积、实际重量、体积重和计费重量。它不连接承运商报价系统，也不代表任何承运商的通用计费规则。
+
+![International Freight Calculator 中文桌面界面](docs/assets/freight-calculator-v0.3.0.png)
 
 ## 功能
 
@@ -11,9 +13,20 @@ International Freight Calculator 是一款离线运行的中文桌面工具，�
 - 导入、导出 `.xlsx`，并提供带单元格校验、填写说明和计算参数的空白模板。
 - 所有计算和货物输入均在本机完成。程序不会自动联网或上传数据。
 
+## 快速计算示例
+
+以下货物和规则均为合成示例，不代表承运商实际计费条件。设体积重除数为 `6000 cm³/kg`，采用整票汇总、`0.5 kg` 向上进位：
+
+| 规格 | 件数 | 单件尺寸 | 单件实重 | 行体积 | 行实重 | 行体积重 |
+| --- | ---: | --- | ---: | ---: | ---: | ---: |
+| 模拟纸箱 A | 3 | 50 × 40 × 30 cm | 8 kg | 0.18 m³ | 24 kg | 30 kg |
+| 模拟纸箱 B | 2 | 20 × 20 × 20 cm | 4.1 kg | 0.016 m³ | 8.2 kg | 2.6667 kg |
+
+汇总：总体积 **0.196 m³**，总实重 **32.2 kg**，总体积重 **32.6667 kg**；整票汇总口径取较大值后向上进位为 **33 kg**。逐件口径则为 **39 kg**。该差异用于说明“逐件取大再进位”与“整票合计后进位”的算法不同，实际渠道规则须单独核实。
+
 ## Windows 运行
 
-普通 Python 运行需要 Python 3.11 或更新版本，且安装包含 Tkinter。项目依赖只有 `openpyxl`。
+普通 Python 运行需要 Python 3.11 或更新版本，且安装包含 Tkinter。项目运行依赖只有 `openpyxl`。
 
 ```powershell
 py -3.12 -m venv .venv
@@ -28,7 +41,7 @@ py -3.12 -m pip install -e .
 freight-calculator
 ```
 
-如本机没有 `py` 启动器，请改用已安装的 `python` 命令。逐步操作说明见 [用户指南](docs/USER_GUIDE.md)。
+如本机没有 `py` 启动器，请将命令中的 `py -3.12` 改为 Python 安装目录下的 `python` 可执行文件。逐步操作说明见 [用户指南](docs/USER_GUIDE.md)。
 
 ## 便携 EXE
 

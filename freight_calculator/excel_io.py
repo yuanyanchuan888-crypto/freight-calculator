@@ -7,7 +7,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Iterable
 
-from .calculator import CalculationResult
+from .calculator import CalculationResult, calculate
 from .models import (
     MAX_PIECES_PER_LINE,
     CargoLine,
@@ -258,6 +258,8 @@ def write_template(path: str | Path) -> None:
         cell.fill = input_fill
         cell.font = Font(name="Arial", color="263746")
         cell.alignment = Alignment(vertical="center")
+    for column in (2, 3, 4, 5, 7):
+        sheet.cell(2, column).number_format = "0.########"
     sheet.row_dimensions[2].height = 25
 
     pieces_validation = DataValidation(
@@ -323,6 +325,7 @@ def write_template(path: str | Path) -> None:
     mode_validation.add("B3")
     increment_validation = DataValidation(type="decimal", operator="greaterThan", formula1="0",
                                           allow_blank=True)
+    increment_validation.errorTitle = "进位单位无效"
     increment_validation.error = "进位单位必须大于 0；留空表示不进位。"
     increment_validation.showErrorMessage = True
     params.add_data_validation(increment_validation)
@@ -356,7 +359,7 @@ def write_template(path: str | Path) -> None:
         ("3. 计算参数", "填写体积重除数、计费口径和进位单位。默认值仅作演示，可按具体渠道规则调整。"),
         ("4. 导入方式", "仅支持 .xlsx。导入公式不会执行，请将需要导入的输入值保存为普通单元格数据。"),
         ("5. 计费口径", "逐件计算与整票汇总可能产生不同结果。最低计费、计泡、分泡及进位规则须向承运渠道核实。"),
-        ("6. 文件限制", "最多导入 5,000 行货物资料。模板不含示例货物，避免把示例误当成真实货物。"),
+        ("6. 文件限制", "最多导入 5,000 行货物资料。输入页保持空白；独立“演示计算”页使用合成数据。"),
     )
     for row in guide_rows:
         guide.append(row)
@@ -368,6 +371,81 @@ def write_template(path: str | Path) -> None:
         row[0].alignment = Alignment(vertical="top", wrap_text=True)
         row[1].alignment = Alignment(vertical="top", wrap_text=True)
         guide.row_dimensions[row[0].row].height = 32
+
+    example = workbook.create_sheet("演示计算")
+    example.sheet_view.showGridLines = False
+    example.sheet_view.zoomScale = 90
+    example.merge_cells("A1:L1")
+    example["A1"] = "演示计算（全部为合成数据，不会从本页导入）"
+    example["A1"].font = Font(name="Microsoft YaHei", size=14, bold=True, color="173B57")
+    example["A1"].alignment = Alignment(vertical="center")
+    example.row_dimensions[1].height = 30
+    example.merge_cells("A2:L2")
+    example["A2"] = "输入页“货物明细”仍为空白。以下仅用于核对计算口径，不代表任何承运商费率或实际货物。"
+    example["A2"].font = Font(name="Microsoft YaHei", color="617384", italic=True)
+    example["A2"].alignment = Alignment(wrap_text=True, vertical="center")
+    example.row_dimensions[2].height = 30
+
+    demo_lines = [
+        CargoLine("模拟纸箱 A", 3, Decimal("50"), Decimal("40"), Decimal("30"),
+                  "cm", Decimal("8"), "kg"),
+        CargoLine("模拟纸箱 B", 2, Decimal("20"), Decimal("20"), Decimal("20"),
+                  "cm", Decimal("4.1"), "kg"),
+    ]
+    demo_settings = CalculationSettings(Decimal("6000"), "shipment_total", Decimal("0.5"))
+    demo_result = calculate(demo_lines, demo_settings)
+    example_headers = (
+        "货物名称", "件数", "长", "宽", "高", "尺寸单位", "单件实重", "重量单位",
+        "行体积(m³)", "行实重(kg)", "行体积重(kg)", "逐件口径计费重(kg)",
+    )
+    for column, heading in enumerate(example_headers, start=1):
+        cell = example.cell(4, column, heading)
+        cell.font = Font(name="Microsoft YaHei", bold=True, color="FFFFFF")
+        cell.fill = PatternFill("solid", fgColor="173B57")
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    example.row_dimensions[4].height = 34
+    for row_number, calculation in enumerate(demo_result.lines, start=5):
+        cargo = calculation.cargo
+        values = (
+            cargo.name, cargo.pieces, float(cargo.length), float(cargo.width), float(cargo.height),
+            cargo.dimension_unit, float(cargo.actual_weight_per_piece), cargo.weight_unit,
+            float(calculation.volume_m3), float(calculation.actual_weight_kg),
+            float(calculation.volumetric_weight_kg), float(calculation.per_piece_chargeable_kg),
+        )
+        for column, value in enumerate(values, start=1):
+            cell = example.cell(row_number, column, value)
+            cell.font = Font(name="Microsoft YaHei", color="263746")
+            cell.alignment = Alignment(vertical="center")
+            if column in (2, 3, 4, 5, 7, 9, 10, 11, 12):
+                cell.number_format = "0.########"
+            if row_number % 2:
+                cell.fill = PatternFill("solid", fgColor="F3F7FA")
+    example.freeze_panes = "B5"
+
+    example["A8"] = "示例参数与汇总"
+    example["A8"].font = Font(name="Microsoft YaHei", bold=True, color="173B57")
+    example_rows = (
+        ("体积重除数", float(demo_settings.volume_divisor), "cm³/kg，仅为演示参数"),
+        ("计费口径", "整票汇总", "先汇总实重与体积重，再比较并进位"),
+        ("进位单位", float(demo_settings.rounding_increment_kg), "kg，按增量向上进位"),
+        ("总体积", float(demo_result.total_volume_m3), "m³"),
+        ("总实际重量", float(demo_result.total_actual_weight_kg), "kg"),
+        ("总体积重", float(demo_result.total_volumetric_weight_kg), "kg"),
+        ("逐件口径计费重量", float(demo_result.per_piece_chargeable_weight_kg), "kg"),
+        ("整票汇总计费重量", float(demo_result.shipment_total_chargeable_weight_kg), "kg"),
+    )
+    for row_number, row in enumerate(example_rows, start=9):
+        for column, value in enumerate(row, start=1):
+            example.cell(row_number, column, value)
+        example.cell(row_number, 2).number_format = "0.########"
+    example.merge_cells("A18:L18")
+    example["A18"] = "不同渠道的除数、计费口径、进位及最低计费可能不同，请以该票承运渠道确认的书面规则为准。"
+    example["A18"].font = Font(name="Microsoft YaHei", color="8A4B08", italic=True)
+    example["A18"].alignment = Alignment(wrap_text=True, vertical="center")
+    example.row_dimensions[18].height = 30
+    example_widths = (20, 9, 9, 9, 9, 12, 12, 12, 14, 14, 15, 20)
+    for index, width in enumerate(example_widths, start=1):
+        example.column_dimensions[chr(64 + index)].width = width
     workbook.save(path)
     workbook.close()
 
